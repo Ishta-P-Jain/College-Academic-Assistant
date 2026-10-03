@@ -20,11 +20,11 @@ def analyze_question(state: WorkflowState):
     ]):
         question_type = "faculty"
 
-elif any(word in question for word in [
+    elif any(word in question for word in [
     "calendar", "exam date", "semester date",
     "semester exam", "semester exams",
     "registration", "academic event"
-]):
+    ]):
         question_type = "calendar"
 
     elif any(word in question for word in [
@@ -44,7 +44,7 @@ elif any(word in question for word in [
 def retrieve_information(state: WorkflowState):
     # This will later connect to Member 1's RAG module.
     return {
-        "retrieved_info": ""
+        "retrieved_info": state["retrieved_info"]
     }
 
 
