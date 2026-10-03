@@ -84,3 +84,41 @@ The project is divided into four main modules:
 
 The quality of academic answers depends on the accuracy and completeness of the provided college documents. The system should clearly communicate when relevant information cannot be found rather than inventing college-specific facts.
 
+⚙️ Installation and Setup
+1. Clone the repository
+git clone <YOUR_GITHUB_REPOSITORY_URL>
+cd academic-assistant
+
+Replace the placeholder with your team's actual GitHub repository URL.
+
+2. Create a virtual environment
+python -m venv .venv
+
+Activate it on Windows:
+
+.venv\Scripts\activate
+3. Install dependencies
+pip install -r requirements.txt
+4. Configure the API key
+
+Create a .env file in the project root and add your Google Gemini API key:
+
+GOOGLE_API_KEY=your_gemini_api_key_here
+
+Get an API key through Google AI Studio.
+
+Security: Never upload your actual .env file or API key to GitHub.
+
+5. Add college documents
+
+Place relevant PDF or text documents inside:
+
+data/college_docs/
+
+Examples include syllabus documents, academic regulations, examination information, and college FAQs.
+
+6. Run the application
+
+Once app.py has been implemented, start the Streamlit application using:
+
+streamlit run app.py
