@@ -11,10 +11,25 @@ class WorkflowState(TypedDict):
 
 
 def analyze_question(state: WorkflowState):
-    question = state["question"]
+    question = state["question"].lower()
 
-    if "study" in question.lower() or "syllabus" in question.lower():
+    if any(word in question for word in [
+        "faculty", "professor", "teacher", "hod"
+    ]):
+        question_type = "faculty"
+
+    elif any(word in question for word in [
+        "calendar", "exam date", "semester date",
+        "registration", "academic event"
+    ]):
+        question_type = "calendar"
+
+    elif any(word in question for word in [
+        "syllabus", "subject", "course", "semester",
+        "credits", "curriculum", "exam"
+    ]):
         question_type = "academic"
+
     else:
         question_type = "general"
 
