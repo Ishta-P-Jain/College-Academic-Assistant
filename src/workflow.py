@@ -1,5 +1,6 @@
 from typing import TypedDict
 from langgraph.graph import StateGraph, START, END
+from src.llm import generate_answer
 
 
 class WorkflowState(TypedDict):
@@ -46,9 +47,13 @@ def retrieve_information(state: WorkflowState):
 
 
 def generate_response(state: WorkflowState):
-    # This will later connect to Member 2's LLM module.
+    answer = generate_answer(
+        state["question"],
+        state["retrieved_info"]
+    )
+
     return {
-        "answer": "Response generation will be connected here."
+        "answer": answer
     }
 
 

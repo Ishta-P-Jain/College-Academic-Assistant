@@ -14,26 +14,38 @@ llm = ChatGoogleGenerativeAI(
 
 def generate_answer(question, context):
     prompt = f"""
-You are the AI assistant for the NMAMIT Computer Science and Engineering department.
+You are the College Academic Assistant for the NMAMIT Computer Science
+and Engineering department.
 
-Answer the user's question using only the provided context.
+You must answer the user's question based ONLY on the context provided below.
 
-Rules:
-- Do not invent NMAMIT or CSE-specific information.
-- If the answer is not available in the context, say that the information
-  could not be verified from the available knowledge base.
-- Give a clear and simple answer.
-- Use the context relevant to the user's question.
-
-Context:
+CONTEXT:
 {context}
 
-User Question:
+USER QUESTION:
 {question}
 
-Answer:
+Instructions:
+1. If the context directly contains information that answers the question,
+   use that information to answer.
+2. Do not say the information is unavailable if the context contains
+   a relevant answer.
+3. Do not add facts that are not present in the context.
+4. If the context does not contain enough information to answer the question,
+   respond exactly:
+   "This information is not available in the current knowledge base."
+5. Keep the answer clear and simple.
+
+ANSWER:
 """
 
     response = llm.invoke(prompt)
+
+    if isinstance(response.content, list):
+        return "".join(
+            block.get("text", "")
+            for block in response.content
+            if isinstance(block, dict)
+        )
 
     return response.content
