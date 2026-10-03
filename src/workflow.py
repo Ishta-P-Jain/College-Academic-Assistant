@@ -8,6 +8,7 @@ class WorkflowState(TypedDict):
     retrieved_info: str
     answer: str
     review: str
+    final_answer: str
 
 
 def analyze_question(state: WorkflowState):
@@ -18,10 +19,11 @@ def analyze_question(state: WorkflowState):
     ]):
         question_type = "faculty"
 
-    elif any(word in question for word in [
-        "calendar", "exam date", "semester date",
-        "registration", "academic event"
-    ]):
+elif any(word in question for word in [
+    "calendar", "exam date", "semester date",
+    "semester exam", "semester exams",
+    "registration", "academic event"
+]):
         question_type = "calendar"
 
     elif any(word in question for word in [
@@ -53,9 +55,18 @@ def generate_response(state: WorkflowState):
 
 
 def review_response(state: WorkflowState):
-    # This will later check the generated response.
+    answer = state["answer"]
+
+    if not answer or not answer.strip():
+        review = "Answer is empty."
+        final_answer = "I could not generate an answer."
+    else:
+        review = "Answer is valid."
+        final_answer = answer
+
     return {
-        "review": "Response reviewed."
+        "review": review,
+        "final_answer": final_answer
     }
 
 
