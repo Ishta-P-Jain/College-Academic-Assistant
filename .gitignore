@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Generated FAISS index (rebuild with: python src/ingest.py)
+data/faiss_index/
+
+# Model caches
+.cache/
+*.faiss
+*.pkl
+
+# Secrets / env — this module needs no API keys, but never commit any
+.env
+.env.*
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Tests
+.pytest_cache/
