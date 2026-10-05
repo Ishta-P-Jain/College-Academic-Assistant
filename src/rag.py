@@ -3,22 +3,21 @@
 No OpenAI / Groq / Gemini / any LLM or API key is required. Everything runs
 locally with sentence-transformers/all-MiniLM-L6-v2.
 
-Score semantics (verified against the installed langchain-community 0.4.2
-source, ``langchain_community/vectorstores/faiss.py``):
+Score semantics (verified against the installed langchain-community source,
+``langchain_community/vectorstores/faiss.py``):
     * The default FAISS index is ``faiss.IndexFlatL2`` with
       ``DistanceStrategy.EUCLIDEAN_DISTANCE``.
     * ``similarity_search_with_score`` returns the **squared L2 distance**
-      between the query and chunk embeddings — documented in that source as
-      "L2 distance in float. Lower score represents more similarity."
-    * The built-in ``score_threshold`` for euclidean distance is applied with
-      ``operator.le`` (keep results where score <= threshold).
+      between the query and chunk embeddings: lower score = more similar.
 
 Therefore MIN_SCORE is an **upper bound on the squared L2 distance**: chunks
 scoring <= MIN_SCORE are kept, anything larger is discarded as irrelevant.
 
-Usage:
-    from rag import retrieve
-    hits = retrieve("what are the library timings?")
+Public API used by the Streamlit app:
+    retrieve_context(question, history=None) -> str   ("" if nothing relevant)
+
+Lower-level API:
+    retrieve(query) -> list of hit dicts
 """
 
 from __future__ import annotations
@@ -46,12 +45,11 @@ MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 MIN_SCORE = 1.40
 
 TOP_K = 4  # candidates fetched from FAISS before MIN_SCORE filtering
+CONTEXT_K = 6  # candidates fetched when building context for the LLM
 
 # --- Strict relevance gate (applied on top of MIN_SCORE) --------------------
 # A candidate is kept only if it has meaningful keyword overlap with the
-# question OR is a very strong semantic match. This stops TOP_K from being
-# padded with unrelated chunks (e.g. syllabus/calendar chunks for a library
-# question) without changing MIN_SCORE, and it never pads the result list:
+# question OR is a very strong semantic match. It never pads the result list:
 # if only 2 chunks are relevant, only 2 are returned.
 #   * STRONG_SEMANTIC_SCORE: on-topic top hits for the verified queries
 #     measured 0.43-0.83; clearly unrelated chunks measured >= 1.29.
@@ -81,13 +79,10 @@ def is_relevant(query: str, content: str, score: float) -> bool:
     """Strict relevance gate for one candidate hit.
 
     Keeps the hit if either:
-      * it has meaningful keyword overlap with the question — at least
+      * it has meaningful keyword overlap with the question (at least
         ``MIN_KEYWORD_OVERLAP`` of the question's content words appear in
-        the chunk, or
-      * it is a very strong semantic match — ``score <= STRONG_SEMANTIC_SCORE``.
-
-    ``score`` is the squared L2 distance from FAISS (lower = more similar);
-    MIN_SCORE has already been applied before this gate.
+        the chunk), or
+      * it is a very strong semantic match (``score <= STRONG_SEMANTIC_SCORE``).
     """
     if score <= STRONG_SEMANTIC_SCORE:
         return True  # very strong semantic match
@@ -100,7 +95,7 @@ def is_relevant(query: str, content: str, score: float) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# 6. get_store()
+# get_store()
 # ---------------------------------------------------------------------------
 
 _store: Optional[FAISS] = None
@@ -137,7 +132,7 @@ def reset_store() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7-9. retrieve() with MIN_SCORE filtering and source metadata
+# retrieve() with MIN_SCORE filtering and source metadata
 # ---------------------------------------------------------------------------
 
 def retrieve(
@@ -148,26 +143,19 @@ def retrieve(
 ) -> List[Dict[str, Any]]:
     """Retrieve the most relevant chunks for ``query``.
 
-    Args:
-        query: Free-text question.
-        k: Number of FAISS candidates to fetch (before filtering).
-        min_score: Maximum acceptable score (squared L2 distance). Chunks
-            scoring **above** this are considered irrelevant and dropped.
+    Returns a list of hit dicts sorted best (lowest score) first::
 
-    Returns:
-        A list of hit dicts sorted best (lowest score) first::
+        {
+            "content": str,      # the chunk text
+            "score": float,      # squared L2 distance; lower = better
+            "source": str,       # e.g. "student_services.md"
+            "file_type": str,    # "md" | "txt" | "pdf" | "docx"
+            "chunk": int,        # chunk index within the corpus
+            "doc_id": str,       # "source#page"
+            "metadata": dict,    # full LangChain metadata
+        }
 
-            {
-                "content": str,      # the chunk text
-                "score": float,      # squared L2 distance; lower = better
-                "source": str,       # e.g. "library_timings.md"
-                "file_type": str,    # "md" | "txt" | "pdf" | "docx"
-                "chunk": int,        # chunk index within the corpus
-                "doc_id": str,       # "source#page"
-                "metadata": dict,    # full LangChain metadata
-            }
-
-        Empty list means nothing in the knowledge base was close enough.
+    An empty list means nothing in the knowledge base was close enough.
     """
     query = (query or "").strip()
     if not query:
@@ -198,22 +186,44 @@ def retrieve(
     return hits
 
 
-def main() -> None:
-    """Interactive command-line retrieval test (continuous loop).
+# ---------------------------------------------------------------------------
+# retrieve_context(): the function app.py calls
+# ---------------------------------------------------------------------------
 
-    Loads the existing FAISS index once (never rebuilds it), then keeps
-    asking ``Enter your question:`` after every retrieval until the user
-    types ``exit``, ``quit`` or ``q``. Retrieval only — MIN_SCORE and the
-    embedding model are unchanged.
+def retrieve_context(question: str, history: Optional[list] = None) -> str:
+    """Return retrieved chunks as one context string for the LLM.
+
+    * Returns "" when nothing relevant is found, so the workflow can answer
+      "not available in the knowledge base" instead of guessing.
+    * Follow-ups: if the question is very short (e.g. "what about its fee?")
+      and there is chat history, the previous user question is prepended to
+      the search query so retrieval still finds the right topic.
     """
+    query = question
+    if history and len(_keywords(question)) <= 3:
+        previous = [m["content"] for m in history if m.get("role") == "user"]
+        if previous:
+            query = f"{previous[-1]} {question}"
+
+    hits = retrieve(query, k=CONTEXT_K)
+    if not hits:
+        return ""
+    return "\n\n---\n\n".join(f"(Source: {h['source']})\n{h['content']}" for h in hits)
+
+
+# ---------------------------------------------------------------------------
+# Interactive CLI test:  python -m src.rag
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    """Interactive command-line retrieval test (type exit / quit / q to stop)."""
     # cp1252 consoles cannot encode some corpus characters (e.g. U+20B9).
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
     except Exception:
         pass
 
-    # Load the existing index once — no rebuild happens in this loop.
-    store = get_store()
+    store = get_store()  # loads the existing index (builds it only if missing)
     print("RAG Retrieval Test")
 
     while True:
@@ -231,7 +241,7 @@ def main() -> None:
         hits = retrieve(query, store=store)
         if not hits:
             print("No relevant information found.")
-            continue  # ask for the next question
+            continue
 
         for i, h in enumerate(hits, start=1):
             print(f"\nResult {i}")
