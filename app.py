@@ -4,6 +4,8 @@ from datetime import date
 import streamlit as st
 from dotenv import load_dotenv
 
+from src import ingest  # noqa: F401
+
 # override=True: values in .env win over stale variables already set in Windows.
 load_dotenv(override=True)
 
