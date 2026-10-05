@@ -4,7 +4,8 @@ from datetime import date
 import streamlit as st
 from dotenv import load_dotenv
 
-load_dotenv()
+# override=True: values in .env win over stale variables already set in Windows.
+load_dotenv(override=True)
 
 st.set_page_config(page_title="College AI Academic Assistant", layout="centered")
 
@@ -18,31 +19,25 @@ except Exception as e:  # missing package, bad path, etc.
     workflow_app = None
     BACKEND_ERROR = str(e)
 
-# Teammate's RAG module: adjust the import below once Member 1 finishes.
-# Expected: a function that takes a question string and returns a context string.
+# RAG module (local embeddings + FAISS). Returns "" when nothing is relevant.
+RAG_ERROR = None
 try:
-    from src.rag import retrieve_context  # noqa: F401
+    from src.rag import retrieve_context
     RAG_READY = True
-except Exception:
+except Exception as e:
     retrieve_context = None
     RAG_READY = False
-
-# Temporary context so the app gives real answers before RAG is connected.
-SAMPLE_CONTEXT = """
-NMAMIT Computer Science and Engineering department (sample placeholder data).
-4th semester subjects: Design and Analysis of Algorithms, Database Management
-Systems, Computer Networks, Operating Systems, Software Engineering.
-Replace this text by connecting the RAG module.
-"""
+    RAG_ERROR = str(e)
 
 
-def get_context(question: str) -> str:
-    if RAG_READY and retrieve_context is not None:
-        try:
-            return retrieve_context(question)
-        except Exception as e:
-            st.warning(f"RAG retrieval failed, using sample context: {e}")
-    return SAMPLE_CONTEXT
+def get_context(question: str, history: list) -> str:
+    if not RAG_READY or retrieve_context is None:
+        return ""  # workflow answers "not available in the knowledge base"
+    try:
+        return retrieve_context(question, history)
+    except Exception as e:
+        st.warning(f"RAG retrieval failed: {e}")
+        return ""
 
 
 def with_history(question: str, history: list, max_turns: int = 3) -> str:
@@ -60,7 +55,7 @@ def ask_assistant(question: str, history: list) -> str:
     result = workflow_app.invoke({
         "question": with_history(question, history),
         "question_type": "",
-        "retrieved_info": get_context(question),
+        "retrieved_info": get_context(question, history),
         "answer": "",
         "review": "",
         "final_answer": "",
@@ -113,12 +108,12 @@ st.session_state.setdefault("plan_inputs", None)
 st.title("College AI Academic Assistant")
 st.write("Ask academic questions or create a personalized study plan.")
 
-if not os.getenv("GOOGLE_API_KEY"):
+if os.getenv("LLM_PROVIDER", "gemini").lower() == "gemini" and not os.getenv("GOOGLE_API_KEY"):
     st.error("GOOGLE_API_KEY not found. Add it to your .env file and restart.")
 if BACKEND_ERROR:
     st.error(f"Could not load src/workflow.py: {BACKEND_ERROR}")
 if not RAG_READY:
-    st.info("RAG module not connected yet. Using placeholder context.")
+    st.error(f"Could not load src/rag.py: {RAG_ERROR}")
 
 academic_tab, planner_tab = st.tabs(["Academic Assistant", "Study Planner"])
 
@@ -186,7 +181,7 @@ with planner_tab:
                 f"**Plan:** {len(plan)} days until {inputs['exam_date']}, "
                 f"{inputs['hours']} hours/day"
             )
-            st.dataframe(plan, use_container_width=True, hide_index=True)
+            st.dataframe(plan, hide_index=True)
 
             st.subheader("Modify Your Plan")
             with st.form("modify_plan_form"):

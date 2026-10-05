@@ -1,6 +1,8 @@
 from typing import TypedDict
+
 from langgraph.graph import StateGraph, START, END
-from src.llm import generate_answer
+
+from src.llm import generate_answer, NOT_AVAILABLE
 
 
 class WorkflowState(TypedDict):
@@ -21,9 +23,9 @@ def analyze_question(state: WorkflowState):
         question_type = "faculty"
 
     elif any(word in question for word in [
-    "calendar", "exam date", "semester date",
-    "semester exam", "semester exams",
-    "registration", "academic event"
+        "calendar", "exam date", "semester date",
+        "semester exam", "semester exams",
+        "registration", "academic event"
     ]):
         question_type = "calendar"
 
@@ -36,27 +38,25 @@ def analyze_question(state: WorkflowState):
     else:
         question_type = "general"
 
-    return {
-        "question_type": question_type
-    }
+    return {"question_type": question_type}
 
 
 def retrieve_information(state: WorkflowState):
-    # This will later connect to Member 1's RAG module.
-    return {
-        "retrieved_info": state["retrieved_info"]
-    }
+    # The RAG context is fetched in app.py (src.rag.retrieve_context) and
+    # passed in through the state; this node forwards it.
+    return {"retrieved_info": state["retrieved_info"]}
 
 
 def generate_response(state: WorkflowState):
-    answer = generate_answer(
-        state["question"],
-        state["retrieved_info"]
-    )
+    context = (state["retrieved_info"] or "").strip()
 
-    return {
-        "answer": answer
-    }
+    # Nothing relevant retrieved: answer "not available" without calling the
+    # LLM (no hallucination, no wasted API call).
+    if not context:
+        return {"answer": NOT_AVAILABLE}
+
+    answer = generate_answer(state["question"], context)
+    return {"answer": answer}
 
 
 def review_response(state: WorkflowState):
@@ -69,10 +69,7 @@ def review_response(state: WorkflowState):
         review = "Answer is valid."
         final_answer = answer
 
-    return {
-        "review": review,
-        "final_answer": final_answer
-    }
+    return {"review": review, "final_answer": final_answer}
 
 
 workflow = StateGraph(WorkflowState)
