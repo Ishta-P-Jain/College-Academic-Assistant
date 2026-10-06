@@ -33,7 +33,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))  # for `python -m src.rag`
 
-import ingest  # noqa: F401
+from src import ingest  # noqa: F401
 
 try:  # works both as `python src/rag.py` and as `python -m src.rag`
     from .ingest import DOCS_DIR, INDEX_DIR, build_index, get_embeddings

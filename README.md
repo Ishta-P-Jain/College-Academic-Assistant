@@ -51,23 +51,6 @@ academic-assistant/
 
 ## 🔄 How It Works
 
-```text
-Student Query
-      ↓
-Request Type Identification
-      ↓
- ┌───────────────┬──────────────────┐
- │ Academic Query│ Study Plan Query  │
- ↓               ↓
-RAG Retrieval    Study Planner
- ↓               ↓
-Gemini LLM       LangGraph Workflow
- ↓               ↓
-       Response
-           ↓
-     Streamlit UI
-```
-
 ### Academic Questions
 
 1. The student enters a question.
